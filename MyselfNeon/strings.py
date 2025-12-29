@@ -67,31 +67,7 @@ async def restart_cmd(client: Client, message: Message):
     # Restart the process
     os.execl(sys.executable, sys.executable, *sys.argv)
 
-# --- 2. AUTOMATIC RESTART CHECK ---
-@Client.on_connect
-async def on_connect_handler(client: Client):
-    if os.path.exists(RESTART_FILE):
-        try:
-            with open(RESTART_FILE, "r") as f:
-                content = f.readlines()
-            
-            if len(content) >= 2:
-                chat_id = int(content[0].strip())
-                msg_id = int(content[1].strip())
-                
-                # Edit the message to say we are back
-                await client.edit_message_text(
-                    chat_id=chat_id,
-                    message_id=msg_id,
-                    text="**__✅ Bot Restarted Successfully!__**"
-                )
-                
-            os.remove(RESTART_FILE)
-            
-        except Exception as e:
-            print(f"Failed to edit restart message: {e}")
-
-# --- 3. SET COMMANDS ---
+# --- 2. SET COMMANDS ---
 @Client.on_message(filters.command("setcmd") & filters.user(ADMINS))
 async def set_commands(client: Client, message: Message):
     commands = []
@@ -110,6 +86,6 @@ async def set_commands(client: Client, message: Message):
     except Exception as e:
         await message.reply_text(f"❌ **Error:** `{e}`")
 
-  # MyselfNeon
+# MyselfNeon
 # # Don't Remove Credit 🥺
 # # Telegram Channel @NeonFiles
