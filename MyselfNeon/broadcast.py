@@ -17,9 +17,10 @@ from config import ADMINS
 import asyncio
 import datetime
 import time
-from pyrogram.types import Message
+from pyrogram.types import Message, BotCommand
 import json
 import os
+import sys
 
 # ---------------------------------------------------
 # Broadcast helper function
@@ -164,6 +165,52 @@ async def users_count(bot: Client, message: Message):
         await msg.edit_text(f"**__⚠️ Error Fetching User Data:__**\n<code>{e}</code>")
         print(f"[!] /users error: {e}")
 
+# --- Set Commands ---
+COMMANDS_TEXT = """
+start - 🚀 𝘊𝘩𝘦𝘤𝘬 𝘈𝘭𝘪𝘷𝘦 𝘚𝘵𝘢𝘵𝘶𝘴
+verify - 🎲 𝘎𝘦𝘵 4 𝘏𝘰𝘶𝘳𝘴 𝘍𝘳𝘦𝘦 𝘈𝘤𝘤𝘦𝘴𝘴
+help - ⁉️ 𝘏𝘰𝘸 𝘵𝘰 𝘜𝘴𝘦 𝘔𝘦
+login - 🔑 𝘓𝘰𝘨𝘪𝘯 𝘠𝘰𝘶𝘳 𝘛𝘦𝘭𝘦𝘨𝘳𝘢𝘮 𝘚𝘦𝘴𝘴𝘪𝘰𝘯
+logout - 🚪 𝘓𝘰𝘨𝘰𝘶𝘵 𝘠𝘰𝘶𝘳 𝘚𝘦𝘴𝘴𝘪𝘰𝘯
+cancel - ❌ 𝘊𝘢𝘯𝘤𝘦𝘭 𝘢𝘯𝘺 𝘖𝘯𝘨𝘰𝘪𝘯𝘨 𝘛𝘢𝘴𝘬
+users - 👥 𝘊𝘩𝘦𝘤𝘬 𝘛𝘰𝘵𝘢𝘭 𝘜𝘴𝘦𝘳𝘴 (𝘈𝘥𝘮𝘪𝘯)
+broadcast - 📢 𝘉𝘳𝘰𝘢𝘥𝘤𝘢𝘴𝘵 𝘔𝘴𝘨𝘴 𝘵𝘰 𝘜𝘴𝘦𝘳𝘴 (𝘈𝘥𝘮𝘪𝘯)
+restart - 🔄 𝘙𝘦𝘴𝘵𝘢𝘳𝘵 𝘉𝘰𝘵 𝘚𝘦𝘳𝘷𝘦𝘳𝘴 (𝘈𝘥𝘮𝘪𝘯)
+"""
+
+# --- 1. RESTART COMMAND (Clean & Self-Contained) ---
+@Client.on_message(filters.command("restart") & filters.user(ADMINS))
+async def restart_cmd(client: Client, message: Message):
+    # 1. Send the confirmation message
+    msg = await message.reply_text(
+        "🔄 **__Restarting Bot...__**\n\n__Please wait while I reload...__"
+    )
+    
+    await asyncio.sleep(100)
+    
+    await msg.delete()
+    
+    # 4. Restart the bot process
+    os.execl(sys.executable, sys.executable, *sys.argv)
+
+# --- 2. SET COMMANDS ---
+@Client.on_message(filters.command("setcmd") & filters.user(ADMINS))
+async def set_commands(client: Client, message: Message):
+    commands = []
+    
+    for line in COMMANDS_TEXT.strip().split("\n"):
+        if "-" in line:
+            cmd, desc = line.split("-", 1)
+            commands.append(BotCommand(cmd.strip(), desc.strip()))
+
+    if not commands:
+        return await message.reply_text("❌ No commands found.")
+
+    try:
+        await client.set_bot_commands(commands)
+        await message.reply_text(f"✅ **__Success 🎉 \nUpdated {len(commands)} Commands.__**")
+    except Exception as e:
+        await message.reply_text(f"❌ **Error:** `{e}`")
 
 # Credits
 # Developer Telegram: @MyselfNeon
