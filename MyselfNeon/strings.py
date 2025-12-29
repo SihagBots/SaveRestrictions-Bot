@@ -13,8 +13,6 @@ from pyrogram import Client, filters
 from pyrogram.types import Message, BotCommand
 from config import ADMINS
 
-RESTART_FILE = ".restart.log"
-
 HELP_TXT = """<b>=====  🆘 𝐇𝐄𝐋𝐏 𝐌𝐄𝐍𝐔 🆘  =====</b>
 
 <blockquote><b>‣ <i>For Private Chats</i></b></blockquote>
@@ -52,19 +50,19 @@ broadcast - 📢 𝘉𝘳𝘰𝘢𝘥𝘤𝘢𝘴𝘵 𝘔𝘴𝘨𝘴 𝘵𝘰 
 restart - 🔄 𝘙𝘦𝘴𝘵𝘢𝘳𝘵 𝘉𝘰𝘵 𝘚𝘦𝘳𝘷𝘦𝘳𝘴 (𝘈𝘥𝘮𝘪𝘯)
 """
 
-# --- 1. RESTART COMMAND ---
+# --- 1. RESTART COMMAND (Clean & Self-Contained) ---
 @Client.on_message(filters.command("restart") & filters.user(ADMINS))
 async def restart_cmd(client: Client, message: Message):
+    # 1. Send the confirmation message
     msg = await message.reply_text(
-        "🔄 **__Restarting Bot...__**\n\n__Reloading scripts and reconnecting...__"
+        "🔄 **__Restarting Bot...__**\n\n__Please wait while I reload...__"
     )
     
-    # Create a temporary file to remember the message info
-    # Chat ID (line 1), Message ID (line 2)
-    with open(RESTART_FILE, "w") as f:
-        f.write(f"{msg.chat.id}\n{msg.id}")
-
-    # Restart the process
+    await asyncio.sleep(100)
+    
+    await msg.delete()
+    
+    # 4. Restart the bot process
     os.execl(sys.executable, sys.executable, *sys.argv)
 
 # --- 2. SET COMMANDS ---
