@@ -9,6 +9,7 @@
 # License: MIT License
 # ---------------------------------------------------
 
+import os
 import asyncio
 import logging
 import datetime
@@ -27,7 +28,6 @@ mongo_client = AsyncIOMotorClient(DB_URI)
 db = mongo_client[DB_NAME]
 users_col = db["logged_users"]
 
-
 async def keep_alive():
     """Send a request every 100 seconds to keep the bot alive."""
     async with aiohttp.ClientSession() as session:
@@ -38,7 +38,6 @@ async def keep_alive():
             except Exception as e:
                 logging.error(f"Keep-alive request failed: {e}")
             await asyncio.sleep(100)
-
 
 class Bot(Client):
     def __init__(self):
@@ -62,6 +61,27 @@ class Bot(Client):
         print(f"[✅] Using Collection: {users_col.name}")
         count = await users_col.count_documents({})
         print(f"[✅] Current Stored Users: {count}")
+
+        # --- ✅ NEW RESTART CHECK LOGIC ---
+        if os.path.exists(".restart.log"):
+            try:
+                with open(".restart.log", "r") as f:
+                    content = f.readlines()
+                
+                if len(content) >= 2:
+                    chat_id = int(content[0].strip())
+                    msg_id = int(content[1].strip())
+                    
+                    # Edit the old "Restarting..." message
+                    await self.edit_message_text(
+                        chat_id=chat_id,
+                        message_id=msg_id,
+                        text="**__✅ Bot Restarted Successfully!__**"
+                    )
+                    
+                os.remove(".restart.log")
+            except Exception as e:
+                print(f"Failed to edit restart message: {e}")
 
         # Start keep-alive
         self.keep_alive_task = asyncio.create_task(keep_alive())
@@ -104,9 +124,7 @@ class Bot(Client):
         await super().stop()
         print("Bot Stopped — Bye 👋")
 
-
 BotInstance = Bot()
-
 
 # ✅ User Logging Handler (Persistent MongoDB)
 @BotInstance.on_message(filters.private & filters.incoming, group=-1)
@@ -148,7 +166,6 @@ async def new_user_log(bot: Client, message: Message):
             print(f"New user log failed: {e}")
 
 BotInstance.run()
-
 
 # MyselfNeon
 # Don't Remove Credit 🥺
