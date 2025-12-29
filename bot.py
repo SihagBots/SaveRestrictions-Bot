@@ -1,15 +1,12 @@
 # ---------------------------------------------------
 # File Name: Bot.py
 # Author: NeonAnurag
+# Original Repo: https://github.com/MyselfNeon/SaveRestrictions-Bot
 # GitHub: https://github.com/MyselfNeon/
 # Telegram: https://t.me/MyelfNeon
 # Created: 2025-11-21
-# Last Modified: 2025-11-22
-# Version: Latest
-# License: MIT License
 # ---------------------------------------------------
 
-import os
 import asyncio
 import logging
 import datetime
@@ -61,27 +58,6 @@ class Bot(Client):
         print(f"[✅] Using Collection: {users_col.name}")
         count = await users_col.count_documents({})
         print(f"[✅] Current Stored Users: {count}")
-
-        # --- ✅ NEW RESTART CHECK LOGIC ---
-        if os.path.exists(".restart.log"):
-            try:
-                with open(".restart.log", "r") as f:
-                    content = f.readlines()
-                
-                if len(content) >= 2:
-                    chat_id = int(content[0].strip())
-                    msg_id = int(content[1].strip())
-                    
-                    # Edit the old "Restarting..." message
-                    await self.edit_message_text(
-                        chat_id=chat_id,
-                        message_id=msg_id,
-                        text="**__✅ Bot Restarted Successfully!__**"
-                    )
-                    
-                os.remove(".restart.log")
-            except Exception as e:
-                print(f"Failed to edit restart message: {e}")
 
         # Start keep-alive
         self.keep_alive_task = asyncio.create_task(keep_alive())
