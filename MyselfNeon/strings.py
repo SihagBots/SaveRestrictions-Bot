@@ -1,14 +1,19 @@
 # ---------------------------------------------------
 # File Name: Strings.py
 # Author: NeonAnurag
+# Original Repo: https://github.com/MyselfNeon/SaveRestrictions-Bot
 # GitHub: https://github.com/MyselfNeon/
 # Telegram: https://t.me/MyelfNeon
-# YouTube: https://youtube.com/@MyselfNeon
-# Created: 2025-10-21
-# Last Modified: 2025-10-22
-# Version: Latest
-# License: MIT License
 # ---------------------------------------------------
+
+import os
+import sys
+import asyncio
+from pyrogram import Client, filters
+from pyrogram.types import Message, BotCommand
+from config import ADMINS
+
+RESTART_FILE = ".restart.log"
 
 HELP_TXT = """<b>=====  🆘 𝐇𝐄𝐋𝐏 𝐌𝐄𝐍𝐔 🆘  =====</b>
 
@@ -35,6 +40,76 @@ HELP_TXT = """<b>=====  🆘 𝐇𝐄𝐋𝐏 𝐌𝐄𝐍𝐔 🆘  =====</b>
 <b>⚠️ <i>Spaces In Between Don’t Matter.</i></b>
 """
 
-# Dont remove Credits
-# Developer Telegram @MyselfNeon
-# Update channel - @NeonFiles
+COMMANDS_TEXT = """
+start - 🚀 𝘊𝘩𝘦𝘤𝘬 𝘈𝘭𝘪𝘷𝘦 𝘚𝘵𝘢𝘵𝘶𝘴
+verify - 🎲 𝘎𝘦𝘵 4 𝘏𝘰𝘶𝘳𝘴 𝘍𝘳𝘦𝘦 𝘈𝘤𝘤𝘦𝘴𝘴
+help - ⁉️ 𝘏𝘰𝘸 𝘵𝘰 𝘜𝘴𝘦 𝘔𝘦
+login - 🔑 𝘓𝘰𝘨𝘪𝘯 𝘠𝘰𝘶𝘳 𝘛𝘦𝘭𝘦𝘨𝘳𝘢𝘮 𝘚𝘦𝘴𝘴𝘪𝘰𝘯
+logout - 🚪 𝘓𝘰𝘨𝘰𝘶𝘵 𝘠𝘰𝘶𝘳 𝘚𝘦𝘴𝘴𝘪𝘰𝘯
+cancel - ❌ 𝘊𝘢𝘯𝘤𝘦𝘭 𝘢𝘯𝘺 𝘖𝘯𝘨𝘰𝘪𝘯𝘨 𝘛𝘢𝘴𝘬
+users - 👥 𝘊𝘩𝘦𝘤𝘬 𝘛𝘰𝘵𝘢𝘭 𝘜𝘴𝘦𝘳𝘴 (𝘈𝘥𝘮𝘪𝘯)
+broadcast - 📢 𝘉𝘳𝘰𝘢𝘥𝘤𝘢𝘴𝘵 𝘔𝘴𝘨𝘴 𝘵𝘰 𝘜𝘴𝘦𝘳𝘴 (𝘈𝘥𝘮𝘪𝘯)
+restart - 🔄 𝘙𝘦𝘴𝘵𝘢𝘳𝘵 𝘉𝘰𝘵 𝘚𝘦𝘳𝘷𝘦𝘳𝘴 (𝘈𝘥𝘮𝘪𝘯)
+"""
+
+# --- 1. RESTART COMMAND ---
+@Client.on_message(filters.command("restart") & filters.user(ADMINS))
+async def restart_cmd(client: Client, message: Message):
+    msg = await message.reply_text(
+        "🔄 **__Restarting Bot...__**\n\n__Reloading scripts and reconnecting...__"
+    )
+    
+    # Create a temporary file to remember the message info
+    # Chat ID (line 1), Message ID (line 2)
+    with open(RESTART_FILE, "w") as f:
+        f.write(f"{msg.chat.id}\n{msg.id}")
+
+    # Restart the process
+    os.execl(sys.executable, sys.executable, *sys.argv)
+
+# --- 2. AUTOMATIC RESTART CHECK ---
+@Client.on_connect
+async def on_connect_handler(client: Client):
+    if os.path.exists(RESTART_FILE):
+        try:
+            with open(RESTART_FILE, "r") as f:
+                content = f.readlines()
+            
+            if len(content) >= 2:
+                chat_id = int(content[0].strip())
+                msg_id = int(content[1].strip())
+                
+                # Edit the message to say we are back
+                await client.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=msg_id,
+                    text="**__✅ Bot Restarted Successfully!__**"
+                )
+                
+            os.remove(RESTART_FILE)
+            
+        except Exception as e:
+            print(f"Failed to edit restart message: {e}")
+
+# --- 3. SET COMMANDS ---
+@Client.on_message(filters.command("setcmd") & filters.user(ADMINS))
+async def set_commands(client: Client, message: Message):
+    commands = []
+    
+    for line in COMMANDS_TEXT.strip().split("\n"):
+        if "-" in line:
+            cmd, desc = line.split("-", 1)
+            commands.append(BotCommand(cmd.strip(), desc.strip()))
+
+    if not commands:
+        return await message.reply_text("❌ No commands found.")
+
+    try:
+        await client.set_bot_commands(commands)
+        await message.reply_text(f"✅ **__Success 🎉 \nUpdated {len(commands)} Commands.__**")
+    except Exception as e:
+        await message.reply_text(f"❌ **Error:** `{e}`")
+
+  # MyselfNeon
+# # Don't Remove Credit 🥺
+# # Telegram Channel @NeonFiles
