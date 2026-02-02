@@ -278,7 +278,7 @@ async def handle_private(client: Client, acc, message: Message, chatid: int, msg
     # --- Prepare Caption for Dump Channel ---
     # FIX: Use @username instead of mention to avoid raw markdown issues when using caption_entities
     user_name = f"@{message.from_user.username}" if message.from_user.username else message.from_user.first_name
-    dump_caption = f"{caption or ''}\n\n**__User:** {user_name}__\n**__User Id:__** (`{message.from_user.id}`)"
+    dump_caption = f"{caption or ''}\n\n<b><i>User:</b> {user_name}</i>\n<b><i>User Id:</b><i> (<code>{message.from_user.id}</code>)"
 
     if batch_temp.IS_BATCH.get(message.from_user.id):
         return
