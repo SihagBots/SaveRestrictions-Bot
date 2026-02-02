@@ -17,7 +17,6 @@ import pyrogram
 from pyrogram import Client, filters, enums
 from pyrogram.errors import FloodWait, UserIsBlocked, InputUserDeactivated, UserAlreadyParticipant, InviteHashExpired, UsernameNotOccupied
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Message
-# ADDED DUMP_CHANNEL TO IMPORTS
 from config import API_ID, API_HASH, ERROR_MESSAGE, VERIFY_TUTORIAL, START_PIC, DUMP_CHANNEL
 from database.db import db
 from MyselfNeon.strings import HELP_TXT
@@ -221,7 +220,8 @@ async def save(client: Client, message: Message):
                                               reply_to_message_id=message.id)
                     return
                 try:
-                    await client.copy_message(message.chat.id, msg.chat.id, msg.id, reply_to_message_id=message.id)
+                    # REMOVED reply_to_message_id here to stop quoting
+                    await client.copy_message(message.chat.id, msg.chat.id, msg.id)
                 except:
                     try:
                         await handle_private(client, acc, message, username, msgid)
@@ -232,7 +232,7 @@ async def save(client: Client, message: Message):
             await asyncio.sleep(3)
 
         batch_temp.IS_BATCH[message.from_user.id] = True
-
+        
 # --- Handle private content ---
 async def handle_private(client: Client, acc, message: Message, chatid: int, msgid: int):
     msg: Message = await acc.get_messages(chatid, msgid)
@@ -249,8 +249,9 @@ async def handle_private(client: Client, acc, message: Message, chatid: int, msg
 
     if "Text" == msg_type:
         try:
-            await client.send_message(chat, f"**__{msg.text}__**", entities=msg.entities, reply_to_message_id=message.id,
-                                      parse_mode=enums.ParseMode.HTML)
+            # FIX: Removed **__ wrapper and parse_mode=HTML to preserve original entities (bold/italic)
+            # FIX: Removed reply_to_message_id to stop quoting
+            await client.send_message(chat, msg.text, entities=msg.entities)
             return
         except Exception as e:
             if ERROR_MESSAGE:
@@ -275,7 +276,7 @@ async def handle_private(client: Client, acc, message: Message, chatid: int, msg
     asyncio.create_task(upstatus(client, f'{message.id}upstatus.txt', smsg, chat))
     caption = msg.caption if msg.caption else None
 
-    # --- NEW: Define Dump Caption ---
+    # --- Prepare Caption for Dump Channel ---
     dump_caption = f"{caption or ''}\n\nUser: {message.from_user.mention}\nUser Id: ({message.from_user.id})"
 
     if batch_temp.IS_BATCH.get(message.from_user.id):
@@ -288,19 +289,18 @@ async def handle_private(client: Client, acc, message: Message, chatid: int, msg
             except:
                 ph_path = None
             
-            # 1. Send to User
-            await client.send_document(chat, file, thumb=ph_path, caption=caption, reply_to_message_id=message.id,
-                                       parse_mode=enums.ParseMode.HTML, progress=progress,
-                                       progress_args=[message, "up"])
+            # FIX: Added caption_entities to preserve bold/style
+            # FIX: Removed reply_to_message_id to stop quoting
+            await client.send_document(chat, file, thumb=ph_path, caption=caption, 
+                                       caption_entities=msg.caption_entities,
+                                       progress=progress, progress_args=[message, "up"])
             
-            # 2. Send to Dump Channel
             if DUMP_CHANNEL:
                 try:
                     await client.send_document(DUMP_CHANNEL, file, thumb=ph_path, caption=dump_caption, parse_mode=enums.ParseMode.HTML)
                 except Exception as e:
                     print(f"Dump Error: {e}")
 
-            # 3. Cleanup
             if ph_path: os.remove(ph_path)
 
         elif "Video" == msg_type:
@@ -308,14 +308,13 @@ async def handle_private(client: Client, acc, message: Message, chatid: int, msg
                 ph_path = await acc.download_media(msg.video.thumbs[0].file_id)
             except:
                 ph_path = None
-            
-            # 1. Send to User
+
+            # FIX: Added caption_entities and removed reply_to_message_id
             await client.send_video(chat, file, duration=msg.video.duration, width=msg.video.width,
                                     height=msg.video.height, thumb=ph_path, caption=caption,
-                                    reply_to_message_id=message.id, parse_mode=enums.ParseMode.HTML,
+                                    caption_entities=msg.caption_entities,
                                     progress=progress, progress_args=[message, "up"])
             
-            # 2. Send to Dump Channel
             if DUMP_CHANNEL:
                 try:
                     await client.send_video(DUMP_CHANNEL, file, duration=msg.video.duration, width=msg.video.width,
@@ -323,14 +322,12 @@ async def handle_private(client: Client, acc, message: Message, chatid: int, msg
                 except Exception as e:
                     print(f"Dump Error: {e}")
 
-            # 3. Cleanup
             if ph_path: os.remove(ph_path)
 
         elif "Animation" == msg_type:
-            # 1. Send to User
-            await client.send_animation(chat, file, reply_to_message_id=message.id, parse_mode=enums.ParseMode.HTML)
+             # FIX: Added caption_entities and removed reply_to_message_id
+            await client.send_animation(chat, file, caption=caption, caption_entities=msg.caption_entities)
             
-            # 2. Send to Dump Channel
             if DUMP_CHANNEL:
                 try:
                     await client.send_animation(DUMP_CHANNEL, file, caption=dump_caption, parse_mode=enums.ParseMode.HTML)
@@ -338,10 +335,9 @@ async def handle_private(client: Client, acc, message: Message, chatid: int, msg
                     print(f"Dump Error: {e}")
 
         elif "Sticker" == msg_type:
-            # 1. Send to User
-            await client.send_sticker(chat, file, reply_to_message_id=message.id, parse_mode=enums.ParseMode.HTML)
+            # FIX: Removed reply_to_message_id
+            await client.send_sticker(chat, file)
             
-            # 2. Send to Dump Channel
             if DUMP_CHANNEL:
                 try:
                     await client.send_sticker(DUMP_CHANNEL, file) 
@@ -350,12 +346,10 @@ async def handle_private(client: Client, acc, message: Message, chatid: int, msg
                     print(f"Dump Error: {e}")
 
         elif "Voice" == msg_type:
-            # 1. Send to User
+            # FIX: Removed reply_to_message_id
             await client.send_voice(chat, file, caption=caption, caption_entities=msg.caption_entities,
-                                    reply_to_message_id=message.id, parse_mode=enums.ParseMode.HTML,
                                     progress=progress, progress_args=[message, "up"])
             
-            # 2. Send to Dump Channel
             if DUMP_CHANNEL:
                 try:
                     await client.send_voice(DUMP_CHANNEL, file, caption=dump_caption, parse_mode=enums.ParseMode.HTML)
@@ -368,27 +362,24 @@ async def handle_private(client: Client, acc, message: Message, chatid: int, msg
             except:
                 ph_path = None
             
-            # 1. Send to User
-            await client.send_audio(chat, file, thumb=ph_path, caption=caption, reply_to_message_id=message.id,
-                                    parse_mode=enums.ParseMode.HTML, progress=progress,
-                                    progress_args=[message, "up"])
+            # FIX: Added caption_entities and removed reply_to_message_id
+            await client.send_audio(chat, file, thumb=ph_path, caption=caption, 
+                                    caption_entities=msg.caption_entities,
+                                    progress=progress, progress_args=[message, "up"])
             
-            # 2. Send to Dump Channel
             if DUMP_CHANNEL:
                 try:
                     await client.send_audio(DUMP_CHANNEL, file, thumb=ph_path, caption=dump_caption, parse_mode=enums.ParseMode.HTML)
                 except Exception as e:
                     print(f"Dump Error: {e}")
 
-            # 3. Cleanup
             if ph_path: os.remove(ph_path)
 
         elif "Photo" == msg_type:
-            # 1. Send to User
-            await client.send_photo(chat, file, caption=caption, reply_to_message_id=message.id,
-                                    parse_mode=enums.ParseMode.HTML)
+            # FIX: Added caption_entities and removed reply_to_message_id
+            await client.send_photo(chat, file, caption=caption, 
+                                    caption_entities=msg.caption_entities)
             
-            # 2. Send to Dump Channel
             if DUMP_CHANNEL:
                 try:
                     await client.send_photo(DUMP_CHANNEL, file, caption=dump_caption, parse_mode=enums.ParseMode.HTML)
