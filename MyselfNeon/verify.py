@@ -16,7 +16,8 @@ import asyncio
 import aiohttp
 from datetime import datetime, timedelta
 from shortzy import Shortzy
-from config import VERIFY_SHORTLINK_URL, VERIFY_SHORTLINK_API, VERIFY, LOG_CHANNEL
+# [span_0](start_span)Added ADMINS to imports[span_0](end_span)
+from config import VERIFY_SHORTLINK_URL, VERIFY_SHORTLINK_API, VERIFY, LOG_CHANNEL, ADMINS
 from database.db import db
 
 async def get_verify_shorted_link(link):
@@ -84,6 +85,10 @@ async def verify_user(bot, user_id, token):
         print(f"Log Error: {e}")
 
 async def check_verification(user_id):
+    # --- ADMIN BYPASS ---
+    if user_id == ADMINS:
+        return True
+
     if not VERIFY: 
         return True
     
