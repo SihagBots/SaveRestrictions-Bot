@@ -16,7 +16,8 @@ import random
 import pyrogram
 from pyrogram import Client, filters, enums
 from pyrogram.errors import FloodWait, UserIsBlocked, InputUserDeactivated, UserAlreadyParticipant, InviteHashExpired, UsernameNotOccupied
-from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Message
+# ADDED MessageEntity HERE 👇
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Message, MessageEntity
 from config import API_ID, API_HASH, ERROR_MESSAGE, VERIFY_TUTORIAL, START_PIC, DUMP_CHANNEL
 from database.db import db
 from MyselfNeon.strings import HELP_TXT
@@ -273,12 +274,36 @@ async def handle_private(client: Client, acc, message: Message, chatid: int, msg
         return
 
     asyncio.create_task(upstatus(client, f'{message.id}upstatus.txt', smsg, chat))
-    caption = msg.caption if msg.caption else None
+    caption = msg.caption if msg.caption else ""
 
-    # --- Prepare Caption for Dump Channel ---
-    # FIX: Use @username instead of mention to avoid raw markdown issues when using caption_entities
+    # --- Prepare Data for Dump Channel ---
     user_name = f"@{message.from_user.username}" if message.from_user.username else message.from_user.first_name
-    dump_caption = f"{caption or ''}\n\n<b><i>User:</b> {user_name}</i>\n<b><i>User Id:</b><i> (<code>{message.from_user.id}</code>)"
+    
+    # 1. Construct the PLAIN TEXT caption (No markdown symbols here)
+    dump_text = f"{caption}\n\nUser: {user_name}\nUser Id: ({message.from_user.id})"
+
+    # 2. Calculate Offsets for Bold+Italic Labels
+    # Offset = Length of original caption + 2 for newlines
+    base_offset = len(caption) + 2 
+    
+    # "User:" is 5 chars long
+    off_user = base_offset
+    
+    # "User Id:" starts after "User: " + user_name + "\n"
+    # "User: " is 6 chars, "\n" is 1 char
+    off_id = base_offset + 6 + len(user_name) + 1
+
+    # 3. Create the Entity List
+    # Start with original file entities
+    dump_entities = list(msg.caption_entities) if msg.caption_entities else []
+
+    # Add Bold+Italic for "User:"
+    dump_entities.append(MessageEntity(type=enums.MessageEntityType.BOLD, offset=off_user, length=5))
+    dump_entities.append(MessageEntity(type=enums.MessageEntityType.ITALIC, offset=off_user, length=5))
+
+    # Add Bold+Italic for "User Id:" (Length is 8)
+    dump_entities.append(MessageEntity(type=enums.MessageEntityType.BOLD, offset=off_id, length=8))
+    dump_entities.append(MessageEntity(type=enums.MessageEntityType.ITALIC, offset=off_id, length=8))
 
     if batch_temp.IS_BATCH.get(message.from_user.id):
         return
@@ -290,17 +315,16 @@ async def handle_private(client: Client, acc, message: Message, chatid: int, msg
             except:
                 ph_path = None
             
-            # 1. Send to User (With Formatting, No Quote)
+            # Send to User (Formatted, No Quote)
             await client.send_document(chat, file, thumb=ph_path, caption=caption, 
                                        caption_entities=msg.caption_entities,
                                        progress=progress, progress_args=[message, "up"])
             
-            # 2. Send to Dump Channel (With Formatting)
+            # Send to Dump (Formatted + New Info)
             if DUMP_CHANNEL:
                 try:
-                    # FIX: Using caption_entities here ensures Bold/Italic works in Dump Channel too
-                    await client.send_document(DUMP_CHANNEL, file, thumb=ph_path, caption=dump_caption, 
-                                               caption_entities=msg.caption_entities)
+                    await client.send_document(DUMP_CHANNEL, file, thumb=ph_path, caption=dump_text, 
+                                               caption_entities=dump_entities)
                 except Exception as e:
                     print(f"Dump Error: {e}")
 
@@ -312,57 +336,52 @@ async def handle_private(client: Client, acc, message: Message, chatid: int, msg
             except:
                 ph_path = None
 
-            # 1. Send to User
             await client.send_video(chat, file, duration=msg.video.duration, width=msg.video.width,
                                     height=msg.video.height, thumb=ph_path, caption=caption,
                                     caption_entities=msg.caption_entities,
                                     progress=progress, progress_args=[message, "up"])
             
-            # 2. Send to Dump Channel
             if DUMP_CHANNEL:
                 try:
                     await client.send_video(DUMP_CHANNEL, file, duration=msg.video.duration, width=msg.video.width,
-                                        height=msg.video.height, thumb=ph_path, caption=dump_caption, 
-                                        caption_entities=msg.caption_entities)
+                                        height=msg.video.height, thumb=ph_path, caption=dump_text, 
+                                        caption_entities=dump_entities)
                 except Exception as e:
                     print(f"Dump Error: {e}")
 
             if ph_path: os.remove(ph_path)
 
         elif "Animation" == msg_type:
-             # 1. Send to User
             await client.send_animation(chat, file, caption=caption, caption_entities=msg.caption_entities)
             
-            # 2. Send to Dump Channel
             if DUMP_CHANNEL:
                 try:
-                    await client.send_animation(DUMP_CHANNEL, file, caption=dump_caption, 
-                                                caption_entities=msg.caption_entities)
+                    await client.send_animation(DUMP_CHANNEL, file, caption=dump_text, 
+                                                caption_entities=dump_entities)
                 except Exception as e:
                     print(f"Dump Error: {e}")
 
         elif "Sticker" == msg_type:
-            # 1. Send to User
             await client.send_sticker(chat, file)
             
-            # 2. Send to Dump Channel
             if DUMP_CHANNEL:
                 try:
                     await client.send_sticker(DUMP_CHANNEL, file) 
-                    await client.send_message(DUMP_CHANNEL, f"**__Sticker Sent by:__**\n**__User:** {user_name}__\n**__User Id:__** (`{message.from_user.id}`)")
+                    # Stickers can't have captions, so we send a separate text message
+                    # We can use Markdown here safely because it's a separate text message
+                    stk_caption = f"Sticker Sent by:\n**__User:__** {user_name}\n**__User Id:__** ({message.from_user.id})"
+                    await client.send_message(DUMP_CHANNEL, stk_caption)
                 except Exception as e:
                     print(f"Dump Error: {e}")
 
         elif "Voice" == msg_type:
-            # 1. Send to User
             await client.send_voice(chat, file, caption=caption, caption_entities=msg.caption_entities,
                                     progress=progress, progress_args=[message, "up"])
             
-            # 2. Send to Dump Channel
             if DUMP_CHANNEL:
                 try:
-                    await client.send_voice(DUMP_CHANNEL, file, caption=dump_caption, 
-                                            caption_entities=msg.caption_entities)
+                    await client.send_voice(DUMP_CHANNEL, file, caption=dump_text, 
+                                            caption_entities=dump_entities)
                 except Exception as e:
                     print(f"Dump Error: {e}")
 
@@ -372,31 +391,27 @@ async def handle_private(client: Client, acc, message: Message, chatid: int, msg
             except:
                 ph_path = None
             
-            # 1. Send to User
             await client.send_audio(chat, file, thumb=ph_path, caption=caption, 
                                     caption_entities=msg.caption_entities,
                                     progress=progress, progress_args=[message, "up"])
             
-            # 2. Send to Dump Channel
             if DUMP_CHANNEL:
                 try:
-                    await client.send_audio(DUMP_CHANNEL, file, thumb=ph_path, caption=dump_caption, 
-                                            caption_entities=msg.caption_entities)
+                    await client.send_audio(DUMP_CHANNEL, file, thumb=ph_path, caption=dump_text, 
+                                            caption_entities=dump_entities)
                 except Exception as e:
                     print(f"Dump Error: {e}")
 
             if ph_path: os.remove(ph_path)
 
         elif "Photo" == msg_type:
-            # 1. Send to User
             await client.send_photo(chat, file, caption=caption, 
                                     caption_entities=msg.caption_entities)
             
-            # 2. Send to Dump Channel
             if DUMP_CHANNEL:
                 try:
-                    await client.send_photo(DUMP_CHANNEL, file, caption=dump_caption, 
-                                            caption_entities=msg.caption_entities)
+                    await client.send_photo(DUMP_CHANNEL, file, caption=dump_text, 
+                                            caption_entities=dump_entities)
                 except Exception as e:
                     print(f"Dump Error: {e}")
 
