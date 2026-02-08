@@ -63,6 +63,42 @@ def progress(current, total, message, type):
     with open(f'{message.id}{type}status.txt', "w") as fileup:
         fileup.write(f"{current * 100 / total:.1f}%")
 
+# --- Helper: Generate Footer for Dump ---
+def get_formatted_footer(message, msg_link, caption, original_entities):
+    # 1. Format User Info
+    if message.from_user.username:
+        user_line = f"User - @{message.from_user.username}"
+    else:
+        user_line = f"User - {message.from_user.first_name} ({message.from_user.id})"
+
+    # 2. Construct Footer Text
+    footer_text = f"{user_line}\nLink - Click Here"
+    
+    # 3. Combine with Caption
+    # If caption exists, add newlines. If not, just footer.
+    full_text = f"{caption}\n\n{footer_text}" if caption else footer_text
+    
+    # 4. Calculate Entities
+    entities = list(original_entities) if original_entities else []
+    
+    # Offset starts at end of original caption + 2 newlines (if caption existed)
+    footer_offset = len(caption) + 2 if caption else 0
+    
+    # --- Add Entities ---
+    # Blockquote
+    entities.append(MessageEntity(type=enums.MessageEntityType.BLOCKQUOTE, offset=footer_offset, length=len(footer_text)))
+    # Bold
+    entities.append(MessageEntity(type=enums.MessageEntityType.BOLD, offset=footer_offset, length=len(footer_text)))
+    # Italic
+    entities.append(MessageEntity(type=enums.MessageEntityType.ITALIC, offset=footer_offset, length=len(footer_text)))
+    
+    # Link (Text Link for "Click Here")
+    # "Link - " is 7 chars. Click Here starts at offset + len(user_line) + 1 + 7
+    link_start = footer_offset + len(user_line) + 1 + 7
+    entities.append(MessageEntity(type=enums.MessageEntityType.TEXT_LINK, offset=link_start, length=10, url=msg_link))
+    
+    return full_text, entities
+
 # --- Start command ---
 @Client.on_message(filters.command(["start"]))
 async def send_start(client: Client, message: Message):
@@ -192,22 +228,30 @@ async def save(client: Client, message: Message):
                 batch_temp.IS_BATCH[message.from_user.id] = True
                 return await message.reply("**__Your Login Session Expired. So /logout First Then Login Again By - /login__**")
 
+            # ------------------------------------------------------------------
+            # SEND INITIAL PROCESSING MESSAGE
+            # ------------------------------------------------------------------
+            smsg = await message.reply_text("**__Processing ...__**", quote=True)
+
+            # --- PRIVATE CHANNELS ---
             if "https://t.me/c/" in message.text:
                 chatid = int("-100" + datas[4])
                 try:
-                    await handle_private(client, acc, message, chatid, msgid)
+                    await handle_private(client, acc, message, chatid, msgid, status_msg=smsg)
                 except Exception as e:
                     if ERROR_MESSAGE:
                         await client.send_message(message.chat.id, f"Error: {e}", reply_to_message_id=message.id)
 
+            # --- PRIVATE BOTS ---
             elif "https://t.me/b/" in message.text:
                 username = datas[4]
                 try:
-                    await handle_private(client, acc, message, username, msgid)
+                    await handle_private(client, acc, message, username, msgid, status_msg=smsg)
                 except Exception as e:
                     if ERROR_MESSAGE:
                         await client.send_message(message.chat.id, f"Error: {e}", reply_to_message_id=message.id)
 
+            # --- PUBLIC CHANNELS (FAST COPY WITH DETECTED MSG) ---
             else:
                 username = datas[3]
                 try:
@@ -216,11 +260,42 @@ async def save(client: Client, message: Message):
                     await client.send_message(message.chat.id, "**__The username is not occupied by anyone.__**",
                                               reply_to_message_id=message.id)
                     return
+                
                 try:
+                    # 1. Update Status to Public Detected
+                    await smsg.edit("**__🖇️ Public Link Detected ...__**")
+                    
+                    # 2. Fast Copy to User (ORIGINAL - NO FOOTER)
                     await client.copy_message(message.chat.id, msg.chat.id, msg.id)
-                except:
+                    
+                    # 3. Send to Dump (WITH FOOTER)
+                    if DUMP_CHANNEL:
+                        msg_link = f"https://t.me/{username}/{msgid}"
+                        
+                        if msg.text:
+                            # For Text: Construct new message with footer
+                            full_text, text_entities = get_formatted_footer(message, msg_link, msg.text, msg.entities)
+                            await client.send_message(DUMP_CHANNEL, full_text, entities=text_entities)
+                        else:
+                            # For Media: Copy with new caption
+                            original_caption = msg.caption if msg.caption else ""
+                            full_caption, full_entities = get_formatted_footer(message, msg_link, original_caption, msg.caption_entities)
+                            
+                            await client.copy_message(
+                                DUMP_CHANNEL, 
+                                msg.chat.id, 
+                                msg.id, 
+                                caption=full_caption, 
+                                caption_entities=full_entities
+                            )
+
+                    # 4. Delete Status Message
+                    await smsg.delete()
+
+                except Exception as e:
+                    # If Copy Fails (Restricted Public), Fallback to Downloader
                     try:
-                        await handle_private(client, acc, message, username, msgid)
+                        await handle_private(client, acc, message, username, msgid, status_msg=smsg)
                     except Exception as e:
                         if ERROR_MESSAGE:
                             await client.send_message(message.chat.id, f"Error: {e}", reply_to_message_id=message.id)
@@ -230,7 +305,8 @@ async def save(client: Client, message: Message):
         batch_temp.IS_BATCH[message.from_user.id] = True
         
 # --- Handle private content ---
-async def handle_private(client: Client, acc, message: Message, chatid: int, msgid: int):
+async def handle_private(client: Client, acc, message: Message, chatid: int, msgid: int, status_msg: Message = None):
+    # Fetch Message from User Client (ACC)
     msg: Message = await acc.get_messages(chatid, msgid)
     if msg.empty:
         return
@@ -243,13 +319,11 @@ async def handle_private(client: Client, acc, message: Message, chatid: int, msg
     if batch_temp.IS_BATCH.get(message.from_user.id):
         return
 
-    # 1. Format User Info
-    if message.from_user.username:
-        user_line = f"User - @{message.from_user.username}"
-    else:
-        user_line = f"User - {message.from_user.first_name} ({message.from_user.id})"
-
-    # 2. Reconstruct Link
+    # ---------------------------------------------------------
+    # PREPARE FOOTER DATA (User, Link, Entities)
+    # ---------------------------------------------------------
+    
+    # Generate Link
     if isinstance(chatid, int):
         c_id_str = str(chatid)
         if c_id_str.startswith("-100"):
@@ -260,43 +334,28 @@ async def handle_private(client: Client, acc, message: Message, chatid: int, msg
     else:
         msg_link = f"https://t.me/{chatid}/{msgid}"
 
-    # 3. Construct Footer Text (Plain)
-    footer_text = f"{user_line}\nLink - Click Here"
+    # Generate Formatted Footer (FOR DUMP ONLY)
+    original_caption = msg.caption if msg.caption else ""
+    original_entities = msg.caption_entities if msg.caption_entities else []
+    
+    full_dump_text, dump_entities = get_formatted_footer(message, msg_link, original_caption, original_entities)
 
-    # Function to create footer entities based on offset
-    def get_footer_entities(offset):
-        entities = []
-        # Blockquote
-        entities.append(MessageEntity(type=enums.MessageEntityType.BLOCKQUOTE, offset=offset, length=len(footer_text)))
-        # Bold
-        entities.append(MessageEntity(type=enums.MessageEntityType.BOLD, offset=offset, length=len(footer_text)))
-        # Italic
-        entities.append(MessageEntity(type=enums.MessageEntityType.ITALIC, offset=offset, length=len(footer_text)))
-        # Link (Text Link for "Click Here")
-        # "Link - " is 7 chars. Click Here starts at offset + len(user_line) + 1 + 7
-        link_start = offset + len(user_line) + 1 + 7
-        entities.append(MessageEntity(type=enums.MessageEntityType.TEXT_LINK, offset=link_start, length=10, url=msg_link))
-        return entities
-
+    # ---------------------------------------------------------
+    # HANDLE TEXT MESSAGES
+    # ---------------------------------------------------------
     if "Text" == msg_type:
         try:
-            # 1. Send to User (Preserve original formatting)
+            # 1. Send to User (ORIGINAL - NO FOOTER)
             await client.send_message(chat, msg.text, entities=msg.entities)
             
-            # 2. Send to Dump (Content + Footer)
+            # 2. Send to Dump (WITH FOOTER)
             if DUMP_CHANNEL:
-                # Calculate new text and entities
-                content = msg.text
-                full_dump_text = f"{content}\n\n{footer_text}"
-                
-                # Start with original entities
-                dump_entities = list(msg.entities) if msg.entities else []
-                
-                # Add Footer Entities
-                footer_offset = len(content) + 2
-                dump_entities.extend(get_footer_entities(footer_offset))
-                
-                await client.send_message(DUMP_CHANNEL, full_dump_text, entities=dump_entities)
+                text_content = msg.text
+                full_text_dump, full_text_entities = get_formatted_footer(message, msg_link, text_content, msg.entities)
+                await client.send_message(DUMP_CHANNEL, full_text_dump, entities=full_text_entities)
+            
+            if status_msg:
+                await status_msg.delete()
             return
         except Exception as e:
             if ERROR_MESSAGE:
@@ -304,7 +363,18 @@ async def handle_private(client: Client, acc, message: Message, chatid: int, msg
                                           parse_mode=enums.ParseMode.HTML)
             return
 
-    smsg = await client.send_message(message.chat.id, '**__Downloading 🚀__**', reply_to_message_id=message.id)
+    # ---------------------------------------------------------
+    # HANDLE MEDIA DOWNLOAD (Status Handling)
+    # ---------------------------------------------------------
+    # If we have a passed status_msg, edit it. Otherwise create new.
+    if status_msg:
+        try:
+            smsg = await status_msg.edit('**__Downloading 🚀__**')
+        except:
+            smsg = await client.send_message(message.chat.id, '**__Downloading 🚀__**', reply_to_message_id=message.id)
+    else:
+        smsg = await client.send_message(message.chat.id, '**__Downloading 🚀__**', reply_to_message_id=message.id)
+
     asyncio.create_task(downstatus(client, f'{message.id}downstatus.txt', smsg, chat))
     try:
         file = await acc.download_media(msg, progress=progress, progress_args=[message, "down"])
@@ -320,14 +390,11 @@ async def handle_private(client: Client, acc, message: Message, chatid: int, msg
 
     asyncio.create_task(upstatus(client, f'{message.id}upstatus.txt', smsg, chat))
     
+    # ---------------------------------------------------------
+    # UPLOAD & DUMP
+    # ---------------------------------------------------------
     caption = msg.caption if msg.caption else ""
-    dump_caption_text = f"{caption}\n\n{footer_text}"
     
-    # Build Entities for Dump
-    dump_caption_entities = list(msg.caption_entities) if msg.caption_entities else []
-    footer_offset = len(caption) + 2
-    dump_caption_entities.extend(get_footer_entities(footer_offset))
-
     try:
         if "Document" == msg_type:
             try:
@@ -335,14 +402,16 @@ async def handle_private(client: Client, acc, message: Message, chatid: int, msg
             except:
                 ph_path = None
             
+            # User gets ORIGINAL
             await client.send_document(chat, file, thumb=ph_path, caption=caption, 
                                        caption_entities=msg.caption_entities,
                                        progress=progress, progress_args=[message, "up"])
             
+            # Dump gets FOOTER
             if DUMP_CHANNEL:
                 try:
-                    await client.send_document(DUMP_CHANNEL, file, thumb=ph_path, caption=dump_caption_text, 
-                                               caption_entities=dump_caption_entities)
+                    await client.send_document(DUMP_CHANNEL, file, thumb=ph_path, caption=full_dump_text, 
+                                               caption_entities=dump_entities)
                 except Exception as e:
                     print(f"Dump Error: {e}")
 
@@ -354,16 +423,18 @@ async def handle_private(client: Client, acc, message: Message, chatid: int, msg
             except:
                 ph_path = None
 
+            # User gets ORIGINAL
             await client.send_video(chat, file, duration=msg.video.duration, width=msg.video.width,
                                     height=msg.video.height, thumb=ph_path, caption=caption,
                                     caption_entities=msg.caption_entities,
                                     progress=progress, progress_args=[message, "up"])
             
+            # Dump gets FOOTER
             if DUMP_CHANNEL:
                 try:
                     await client.send_video(DUMP_CHANNEL, file, duration=msg.video.duration, width=msg.video.width,
-                                        height=msg.video.height, thumb=ph_path, caption=dump_caption_text, 
-                                        caption_entities=dump_caption_entities)
+                                        height=msg.video.height, thumb=ph_path, caption=full_dump_text, 
+                                        caption_entities=dump_entities)
                 except Exception as e:
                     print(f"Dump Error: {e}")
 
@@ -374,14 +445,14 @@ async def handle_private(client: Client, acc, message: Message, chatid: int, msg
             
             if DUMP_CHANNEL:
                 try:
-                    await client.send_animation(DUMP_CHANNEL, file, caption=dump_caption_text, 
-                                                caption_entities=dump_caption_entities)
+                    await client.send_animation(DUMP_CHANNEL, file, caption=full_dump_text, 
+                                                caption_entities=dump_entities)
                 except Exception as e:
                     print(f"Dump Error: {e}")
 
         elif "Sticker" == msg_type:
             await client.send_sticker(chat, file)
-            # NO DUMP FOR STICKERS AS REQUESTED
+            # No dump for stickers
 
         elif "Voice" == msg_type:
             await client.send_voice(chat, file, caption=caption, caption_entities=msg.caption_entities,
@@ -389,8 +460,8 @@ async def handle_private(client: Client, acc, message: Message, chatid: int, msg
             
             if DUMP_CHANNEL:
                 try:
-                    await client.send_voice(DUMP_CHANNEL, file, caption=dump_caption_text, 
-                                            caption_entities=dump_caption_entities)
+                    await client.send_voice(DUMP_CHANNEL, file, caption=full_dump_text, 
+                                            caption_entities=dump_entities)
                 except Exception as e:
                     print(f"Dump Error: {e}")
 
@@ -400,14 +471,16 @@ async def handle_private(client: Client, acc, message: Message, chatid: int, msg
             except:
                 ph_path = None
             
+            # User gets ORIGINAL
             await client.send_audio(chat, file, thumb=ph_path, caption=caption, 
                                     caption_entities=msg.caption_entities,
                                     progress=progress, progress_args=[message, "up"])
             
+            # Dump gets FOOTER
             if DUMP_CHANNEL:
                 try:
-                    await client.send_audio(DUMP_CHANNEL, file, thumb=ph_path, caption=dump_caption_text, 
-                                            caption_entities=dump_caption_entities)
+                    await client.send_audio(DUMP_CHANNEL, file, thumb=ph_path, caption=full_dump_text, 
+                                            caption_entities=dump_entities)
                 except Exception as e:
                     print(f"Dump Error: {e}")
 
@@ -419,8 +492,8 @@ async def handle_private(client: Client, acc, message: Message, chatid: int, msg
             
             if DUMP_CHANNEL:
                 try:
-                    await client.send_photo(DUMP_CHANNEL, file, caption=dump_caption_text, 
-                                            caption_entities=dump_caption_entities)
+                    await client.send_photo(DUMP_CHANNEL, file, caption=full_dump_text, 
+                                            caption_entities=dump_entities)
                 except Exception as e:
                     print(f"Dump Error: {e}")
 
