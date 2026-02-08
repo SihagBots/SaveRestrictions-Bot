@@ -274,39 +274,82 @@ async def handle_private(client: Client, acc, message: Message, chatid: int, msg
         return
 
     asyncio.create_task(upstatus(client, f'{message.id}upstatus.txt', smsg, chat))
+    
     caption = msg.caption if msg.caption else ""
 
-    # --- Prepare Data for Dump Channel ---
-    user_name = f"@{message.from_user.username}" if message.from_user.username else message.from_user.first_name
-    
-    # 1. Construct the PLAIN TEXT caption (No markdown symbols here)
-    dump_text = f"{caption}\n\nUser: {user_name}\nUser Id: ({message.from_user.id})"
+    # 1. Format User Info (Standard @username, no underscores added)
+    if message.from_user.username:
+        user_line = f"User - @{message.from_user.username}"
+    else:
+        user_line = f"User - {message.from_user.first_name} ({message.from_user.id})"
 
-    # 2. Calculate Offsets for Bold+Italic Labels
-    # Offset = Length of original caption + 2 for newlines
-    base_offset = len(caption) + 2 
-    
-    # "User:" is 5 chars long
-    off_user = base_offset
-    
-    # "User Id:" starts after "User: " + user_name + "\n"
-    # "User: " is 6 chars, "\n" is 1 char
-    off_id = base_offset + 6 + len(user_name) + 1
+    # 2. Reconstruct Link
+    if isinstance(chatid, int):
+        # Handle Private Channel ID (-100xxxx)
+        c_id_str = str(chatid)
+        if c_id_str.startswith("-100"):
+            clean_id = c_id_str[4:]
+        else:
+            clean_id = c_id_str
+        msg_link = f"https://t.me/c/{clean_id}/{msgid}"
+    else:
+        # Handle Username
+        msg_link = f"https://t.me/{chatid}/{msgid}"
 
-    # 3. Create the Entity List
-    # Start with original file entities
+    # 3. Construct Footer Text (Plain)
+    footer_text = f"{user_line}\nLink - Click Here"
+    
+    # 4. Full Caption
+    dump_text = f"{caption}\n\n{footer_text}"
+
+    # 5. Build Entities
     dump_entities = list(msg.caption_entities) if msg.caption_entities else []
+    
+    # Calculate Offsets
+    footer_offset = len(caption) + 2  # After caption + 2 newlines
+    
+    # "Link - " is 7 chars. 
+    # Link Text starts at: footer_offset + len(user_line) + 1 (newline) + 7
+    link_start_offset = footer_offset + len(user_line) + 1 + 7
+    
+    # --- Add Entities (Blockquote + Bold + Italic + Link) ---
 
-    # Add Bold+Italic for "User:"
-    dump_entities.append(MessageEntity(type=enums.MessageEntityType.BOLD, offset=off_user, length=5))
-    dump_entities.append(MessageEntity(type=enums.MessageEntityType.ITALIC, offset=off_user, length=5))
+    # 1. Blockquote (The Bar)
+    dump_entities.append(
+        MessageEntity(
+            type=enums.MessageEntityType.BLOCKQUOTE,
+            offset=footer_offset,
+            length=len(footer_text)
+        )
+    )
 
-    # Add Bold+Italic for "User Id:" (Length is 8)
-    dump_entities.append(MessageEntity(type=enums.MessageEntityType.BOLD, offset=off_id, length=8))
-    dump_entities.append(MessageEntity(type=enums.MessageEntityType.ITALIC, offset=off_id, length=8))
+    # 2. Bold (Whole Footer)
+    dump_entities.append(
+        MessageEntity(
+            type=enums.MessageEntityType.BOLD,
+            offset=footer_offset,
+            length=len(footer_text)
+        )
+    )
 
-    if batch_temp.IS_BATCH.get(message.from_user.id):
-        return
+    # 3. Italic (Whole Footer)
+    dump_entities.append(
+        MessageEntity(
+            type=enums.MessageEntityType.ITALIC,
+            offset=footer_offset,
+            length=len(footer_text)
+        )
+    )
+
+    # 4. Text Link (Click Here)
+    dump_entities.append(
+        MessageEntity(
+            type=enums.MessageEntityType.TEXT_LINK,
+            offset=link_start_offset,
+            length=10, # Length of "Click Here"
+            url=msg_link
+        )
+    )
 
     try:
         if "Document" == msg_type:
@@ -367,10 +410,35 @@ async def handle_private(client: Client, acc, message: Message, chatid: int, msg
             if DUMP_CHANNEL:
                 try:
                     await client.send_sticker(DUMP_CHANNEL, file) 
-                    # Stickers can't have captions, so we send a separate text message
-                    # We can use Markdown here safely because it's a separate text message
-                    stk_caption = f"Sticker Sent by:\n**__User:__** {user_name}\n**__User Id:__** ({message.from_user.id})"
-                    await client.send_message(DUMP_CHANNEL, stk_caption)
+                    
+                    # Stickers need a separate text message
+                    # We manually construct a text message with the same entities
+                    stk_text = footer_text
+                    stk_entities = [
+                        MessageEntity(
+                            type=enums.MessageEntityType.BLOCKQUOTE,
+                            offset=0,
+                            length=len(stk_text)
+                        ),
+                        MessageEntity(
+                            type=enums.MessageEntityType.BOLD,
+                            offset=0,
+                            length=len(stk_text)
+                        ),
+                        MessageEntity(
+                            type=enums.MessageEntityType.ITALIC,
+                            offset=0,
+                            length=len(stk_text)
+                        ),
+                        MessageEntity(
+                            type=enums.MessageEntityType.TEXT_LINK,
+                            offset=len(user_line) + 1 + 7, # Same logic as above but offset starts at 0
+                            length=10,
+                            url=msg_link
+                        )
+                    ]
+                    
+                    await client.send_message(DUMP_CHANNEL, stk_text, entities=stk_entities)
                 except Exception as e:
                     print(f"Dump Error: {e}")
 
