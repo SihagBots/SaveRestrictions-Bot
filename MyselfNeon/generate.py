@@ -29,17 +29,17 @@ SESSION_STRING_SIZE = 351
 
 @Client.on_message(filters.private & ~filters.forwarded & filters.command(["logout"]))
 async def logout(client, message):
-    [span_0](start_span)user_data = await db.get_session(message.from_user.id)[span_0](end_span)
+    user_data = await db.get_session(message.from_user.id)
     if user_data is None:
         return 
-    [span_1](start_span)await db.set_session(message.from_user.id, session=None)[span_1](end_span)
+    await db.set_session(message.from_user.id, session=None)
     await message.reply("**__Logout Successfully__ 🚪**")
 
 # --- NEW COMMAND: Login via Session String ---
 @Client.on_message(filters.private & ~filters.forwarded & filters.command(["login_session"]))
 async def login_session_handler(bot: Client, message: Message):
     # 1. Check if user is already logged in
-    [span_2](start_span)user_data = await db.get_session(message.from_user.id)[span_2](end_span)
+    user_data = await db.get_session(message.from_user.id)
     if user_data is not None:
         await message.reply("**__You Are Already Logged In 🤓\n\nFirst /logout Your Old Session. Then Do /login_session Again !!__ 🔑**")
         return 
@@ -75,7 +75,7 @@ async def login_session_handler(bot: Client, message: Message):
         await temp_client.disconnect()
 
         # 5. Success: Save to Database
-        [span_3](start_span)await db.set_session(message.from_user.id, session=session_string)[span_3](end_span)
+        await db.set_session(message.from_user.id, session=session_string)
         await status_msg.edit(f"**__✅ Login Successful!__**\n\n**Logged in as:** `{me.first_name}`")
 
     except Exception as e:
@@ -86,7 +86,7 @@ async def login_session_handler(bot: Client, message: Message):
 # --- EXISTING COMMAND: Login via Phone Number ---
 @Client.on_message(filters.private & ~filters.forwarded & filters.command(["login"]))
 async def main(bot: Client, message: Message):
-    [span_4](start_span)user_data = await db.get_session(message.from_user.id)[span_4](end_span)
+    user_data = await db.get_session(message.from_user.id)
     if user_data is not None:
         await message.reply("**__Your Are Already Logged In 🤓\n\nFirst /logout Your Old Session. Then Do /login Again !!__ 🔑**")
         return 
@@ -95,7 +95,7 @@ async def main(bot: Client, message: Message):
     if phone_number_msg.text=='/cancel':
         return await phone_number_msg.reply('<b>❌ __Process Cancelled !!__</b>')
     phone_number = phone_number_msg.text
-    [span_5](start_span)client = Client(":memory:", API_ID, API_HASH)[span_5](end_span)
+    client = Client(":memory:", API_ID, API_HASH)
     await client.connect()
     await phone_number_msg.reply("**📩 __Sending OTP...__**")
     try:
@@ -130,11 +130,11 @@ async def main(bot: Client, message: Message):
     if len(string_session) < SESSION_STRING_SIZE:
         return await message.reply('<b>❌ __Invalid Session Sring__</b>')
     try:
-        [span_6](start_span)user_data = await db.get_session(message.from_user.id)[span_6](end_span)
+        user_data = await db.get_session(message.from_user.id)
         if user_data is None:
             uclient = Client(":memory:", session_string=string_session, api_id=API_ID, api_hash=API_HASH)
             await uclient.connect()
-            [span_7](start_span)await db.set_session(message.from_user.id, session=string_session)[span_7](end_span)
+            await db.set_session(message.from_user.id, session=string_session)
     except Exception as e:
         return await message.reply_text(f"<b>❌ __ERROR IN LOGIN: `{e}`__</b>")
     await bot.send_message(message.from_user.id, "<b>__Account Login Successfully ✅\n\nIf You Get Any Error Related To AUTH KEY Then /logout first and /login again.__</b>")
