@@ -19,17 +19,17 @@ API_ID = int(os.environ.get("API_ID", ""))
 API_HASH = os.environ.get("API_HASH", "")
 
 # Your Owner / Admin Id For Broadcast 
-ADMINS = int(os.environ.get("ADMINS", "841851780"))
+ADMINS = int(os.environ.get("ADMINS", ""))
 
 # Your Mongodb Database Url
 DB_URI = os.environ.get("DB_URI", "")
 DB_NAME = os.environ.get("DB_NAME", "SaveRestricted")
 
 # Log Channel to Track New Users 
-LOG_CHANNEL = int(os.environ.get("LOG_CHANNEL", "-1001889915480"))
+LOG_CHANNEL = int(os.environ.get("LOG_CHANNEL", "-1003591916255"))
 
 # Dump Channel for File Tracking (ADDED)
-DUMP_CHANNEL = int(os.environ.get("DUMP_CHANNEL", "-1002766188813"))
+DUMP_CHANNEL = int(os.environ.get("DUMP_CHANNEL", "-1003542287615"))
 
 # If You Want Error Message In Your Personal Message Then Turn It True Else If You Don't Want Then False
 ERROR_MESSAGE = bool(os.environ.get('ERROR_MESSAGE', True))
@@ -44,8 +44,8 @@ START_PIC = os.environ.get("START_PIC", "https://files.catbox.moe/krxuel.jpg")
 # VERIFICATION CONFIG
 # -------------------
 VERIFY = bool(os.environ.get('VERIFY', True)) # Set True to enable
-VERIFY_SHORTLINK_URL = os.environ.get('VERIFY_SHORTLINK_URL', 'ShrinkMe.io') # Your Shortener Domain
-VERIFY_SHORTLINK_API = os.environ.get('VERIFY_SHORTLINK_API', '') # Your Shortener API Key
+VERIFY_SHORTLINK_URL = os.environ.get('VERIFY_SHORTLINK_URL', 'vplink.in') # Your Shortener Domain
+VERIFY_SHORTLINK_API = os.environ.get('VERIFY_SHORTLINK_API', 'b4c55b5464676e8a7bbf9e8903b00a289debbec3') # Your Shortener API Key
 VERIFY_TUTORIAL = os.environ.get('VERIFY_TUTORIAL', 'https://t.me/your_tutorial_link') # Tutorial Link
 
 
