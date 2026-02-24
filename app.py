@@ -1,40 +1,32 @@
 # ---------------------------------------------------
-# File Name: bot.py
-# Modified For Koyeb Deployment
+# File Name: App.py
+# Author: NeonAnurag
+# GitHub: https://github.com/MyselfNeon/
+# Telegram: https://t.me/MyelfNeon
+# Created: 2025-11-21
+# Last Modified: 2025-11-22
+# Version: Latest
+# License: MIT License
 # ---------------------------------------------------
 
-import sys
-import os
-import asyncio
-import logging
-import traceback
-import logging.handlers as handlers
-from datetime import datetime, timezone, timedelta
+from flask import Flask
+app = Flask(__name__)
 
-from aiohttp import web
-from pyrogram import idle
-import aiohttp
+@app.route('/')
+def hello_world():
+    return """
+    <body style="background-color:black; color:#39FF14; display:flex; justify-content:center; align-items:flex-start; height:100vh; margin:0; font-family:sans-serif; padding-top:20vh; font-size:4rem;">
+        Coded By @MyselfNeon
+    </body>
+    """
 
-from FileStream.config import Telegram, Server, KEEP_ALIVE_URL
-from FileStream.bot import FileStream
-from FileStream.server import web_server
-from FileStream.bot.clients import initialize_clients
+if __name__ == "__main__":
+    app.run()
 
-# ------------------ Logging Setup ------------------
 
-logging.basicConfig(
-    level=logging.INFO,
-    datefmt="%d/%m/%Y %H:%M:%S",
-    format='[%(asctime)s] {%(pathname)s:%(lineno)d} %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(stream=sys.stdout),
-        handlers.RotatingFileHandler(
-            "streambot.log",
-            mode="a",
-            maxBytes=104857600,
-            backupCount=2,
-            encoding="utf-8"
-        )
+# MyselfNeon
+# Don't Remove Credit 🥺
+# Telegram Channel @NeonFiles        )
     ],
 )
 
