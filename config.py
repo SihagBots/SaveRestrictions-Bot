@@ -19,17 +19,17 @@ API_ID = int(os.environ.get("API_ID", ""))
 API_HASH = os.environ.get("API_HASH", "")
 
 # Your Owner / Admin Id For Broadcast 
-ADMINS = int(os.environ.get("ADMINS", ""))
+ADMINS = int(os.environ.get("ADMINS", "6891095964"))
 
 # Your Mongodb Database Url
 DB_URI = os.environ.get("DB_URI", "")
 DB_NAME = os.environ.get("DB_NAME", "SaveRestricted")
 
 # Log Channel to Track New Users 
-LOG_CHANNEL = int(os.environ.get("LOG_CHANNEL", "-1003591916255"))
+LOG_CHANNEL = int(os.environ.get("LOG_CHANNEL", "-1003718888825"))
 
 # Dump Channel for File Tracking (ADDED)
-DUMP_CHANNEL = int(os.environ.get("DUMP_CHANNEL", "-1003542287615"))
+DUMP_CHANNEL = int(os.environ.get("DUMP_CHANNEL", "-1003878889132"))
 
 # If You Want Error Message In Your Personal Message Then Turn It True Else If You Don't Want Then False
 ERROR_MESSAGE = bool(os.environ.get('ERROR_MESSAGE', True))
